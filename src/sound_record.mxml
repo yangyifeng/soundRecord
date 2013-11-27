@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009"
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:mx="library://ns.adobe.com/flex/mx"
+			   creationComplete="init()">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.adobe.audio.format.WAVWriter;
+			
+			import flash.events.SampleDataEvent;
+			import flash.media.Microphone;
+			import flash.media.Sound;
+			import flash.utils.ByteArray;
+			
+			import fr.kikko.lab.ShineMP3Encoder;
+									
+			[Bindable] private var microphoneList:Array;
+			protected var microphone:Microphone = Microphone.getMicrophone();;
+			protected var isRecording:Boolean = false;
+			protected var soundRecording:ByteArray;
+			protected var soundOutput:Sound;
+			
+			private var urlReq:URLRequest;
+			private var sourceSnd:Sound;
+			private var outputSnd:Sound;
+			private var sChannel:SoundChannel;
+			
+			protected function init():void
+			{
+				microphoneList = Microphone.names;
+			}
+			
+			/**
+			 * 播放从 url 中获取的声音文件。
+			 * 
+			 * param _url:String   "a.mp3"
+			 * 
+			 * */
+			protected function getSoundFromUrl(_url:String):void{
+				urlReq= new URLRequest(_url);  
+				sourceSnd=new Sound(); 
+				sourceSnd.load(urlReq);
+				sourceSnd.addEventListener(Event.COMPLETE, function(e:Event):void{
+					outputSnd=new Sound(); 
+					outputSnd.addEventListener(SampleDataEvent.SAMPLE_DATA, processSound);
+					outputSnd.play();
+				});
+			}
+			
+			protected function processSound(event:SampleDataEvent):void
+			{
+				var bytes:ByteArray = new ByteArray();
+				sourceSnd.extract(bytes, 8192); 
+				
+				while(bytes.bytesAvailable) {
+					var sample:Number = bytes.readFloat();      
+					//soundRecording.writeFloat(sample);     
+				}
+				event.data.writeBytes(bytes);
+			}
+			
+			/**
+			 * 选择麦克风
+			 * 
+			 * */
+			protected function setupMicrophone():void
+			{
+				microphone = Microphone.getMicrophone(comboMicList.selectedIndex);
+				microphone.rate = 44;
+				microphone.setUseEchoSuppression(true);
+				microphone.setLoopBack(false);
+				microphone.setSilenceLevel(0,0);
+				microphone.gain=50;
+				
+				smr.enabled=true;
+			}
+			
+			/**
+			 * 开始录音
+			 * 
+			 * */
+			protected function startMicRecording():void
+			{
+				isRecording = true;
+				soundRecording = new ByteArray();
+				microphone.addEventListener(SampleDataEvent.SAMPLE_DATA, gotMicData);
+				
+				if(sChannel){
+					sChannel.stop();
+				}
+				outputSnd = new Sound(); 
+				outputSnd.addEventListener(SampleDataEvent.SAMPLE_DATA, processSound);
+				sChannel = outputSnd.play();
+
+			}
+			
+			/**
+			 * 停止录音
+			 * 
+			 * */
+			protected function stopMicRecording():void
+			{
+				isRecording = false;
+				microphone.removeEventListener(SampleDataEvent.SAMPLE_DATA, gotMicData);
+				if(sChannel){
+					sChannel.stop();
+				}
+				outputSnd.removeEventListener(SampleDataEvent.SAMPLE_DATA, processSound);
+			}
+			
+			/**
+			 * 开始录音：获取声音
+			 * 
+			 * */
+			private function gotMicData(micData:SampleDataEvent):void
+			{
+				
+				while(micData.data.bytesAvailable) {
+					var sample:Number = micData.data.readFloat();      
+					soundRecording.writeFloat(sample);
+					
+					//////////////////////////////////////
+					tips.text = "录音 soundRecording.length: " + String(soundRecording.length / 1000);
+				}
+				
+			}
+			
+			/**
+			 * 播放录音
+			 * 
+			 * */
+			protected function playbackData():void
+			{
+				soundRecording.position = 0;
+				
+				soundOutput = new Sound();
+				soundOutput.addEventListener(SampleDataEvent.SAMPLE_DATA, playSound);
+				
+				soundOutput.play();
+			}
+			
+			private function playSound(soundOutput:SampleDataEvent):void
+			{
+				//soundOutput.data.writeBytes(soundRecording);
+				
+				//////////////////////////////////////////
+				tips.text = "播放录音 soundRecording.length: " + String(soundRecording.length / 1000);
+				tips.text += "\n\n" + "outputSnd.bytesAvailable: " + String(soundRecording.bytesAvailable);
+				
+				if (!soundRecording.bytesAvailable > 0){
+					return;				
+				}
+
+				for (var i:int = 0; i < 8192; i++)
+				{
+					var sample:Number = 0;
+					if (soundRecording.bytesAvailable > 0){
+						sample = soundRecording.readFloat();
+					}
+					soundOutput.data.writeFloat(sample); 
+					soundOutput.data.writeFloat(sample);  
+				}
+			}
+			
+			private var mp3Encoder:ShineMP3Encoder;
+			private function encodeToMP3():void {
+				
+				//////////
+				tips.text = '开始转换临时格式 wav';
+				
+				var wavWriter:WAVWriter = new WAVWriter();
+				soundRecording.position = 0;
+			
+				wavWriter.numOfChannels = 1; 
+				wavWriter.sampleBitRate = 16; 
+				wavWriter.samplingRate = 44100; 
+				
+				var wav:ByteArray = new ByteArray();
+				//var _timer:Timer = new getTimer();
+
+				wavWriter.processSamples(wav, soundRecording, 44100, 1);
+				
+				//////////////
+				/*
+				tips.text = '转换临时格式 wav 使用: ' + String(Number(new getTimer()) - Number(_timer)) + ' ms'
+							+ '\n\n 正在转换格式 mp3';
+				*/
+				
+				wav.position = 0;
+				
+				mp3Encoder = new ShineMP3Encoder(wav);
+				mp3Encoder.addEventListener(Event.COMPLETE, mp3EncodeComplete);
+				mp3Encoder.addEventListener(ProgressEvent.PROGRESS, mp3EncodeProgress);
+				mp3Encoder.addEventListener(ErrorEvent.ERROR, mp3EncodeError);
+				mp3Encoder.start();
+			}
+			private function mp3EncodeProgress(event : ProgressEvent) : void {
+				
+				tips.text = event.bytesLoaded + " : " + event.bytesTotal;
+			}
+			
+			private function mp3EncodeError(event : ErrorEvent) : void {
+				
+				tips.text = "Error : " + event.text;
+			}
+			private function mp3EncodeComplete(event:Event) : void {
+				
+				mp3Encoder.mp3Data.position = 0;
+				
+				tips.text = "转换格式 mp3 成功，长度：" + String(mp3Encoder.mp3Data.length)
+						+ '\n\n开始上传';
+								
+				upload();
+			}
+			
+			public function upload():void{
+				
+				var header:URLRequestHeader = new URLRequestHeader ("Content-type", "application/octet-stream");
+				var request:URLRequest=new URLRequest("./file_upload/upload.php");
+				request.requestHeaders.push(header);
+				request.method="POST";
+				
+				var params:URLVariables=new URLVariables();
+				params.rnd = Math.random();
+				request.data = mp3Encoder.mp3Data;
+				
+				var load:URLLoader=new URLLoader();
+				load.load(request);
+				load.addEventListener(Event.COMPLETE,function(evt:Event):void{
+					tips.text = "上传成功！";
+					
+					//调用页面的页面中的js，执行需要的操作
+					//ExternalInterface.call("callJS");
+				});
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<mx:ComboBox id="comboMicList" x="67" y="63" width="196" dataProvider="{microphoneList}"/>
+	<s:Button x="279" y="63" width="90" label="选择麦克风" click="setupMicrophone()"/>
+	<s:Button id="smr" x="67" y="123" width="90" label="开始录音" click="startMicRecording()"
+			  enabled="false"/>
+	<s:Button x="173" y="123" width="90" label="停止录音" click="stopMicRecording()"/>
+	<s:Button x="279" y="123" width="90" label="播放录音" click="playbackData()"/>
+	
+	<s:TextArea x="67" y="185" width="302" id="tips" height="154"/>
+	<s:Button x="67" y="384" label="上传" click="encodeToMP3()"/>
+	<s:Button x="173" y="384" label="播放 test.mp3" click="getSoundFromUrl('./file_upload/test.mp3')"/>
+	
+</s:Application>
