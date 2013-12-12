@@ -1,8 +1,7 @@
-
-
 <?php
 
-$data = file_get_contents('php://input');
-file_put_contents('test.mp3', $data);
+    $file = fopen( $_POST["rnd"].".mp3", "w" );
+    fwrite( $file, base64_decode( $_POST["file"] ) );
+    fclose($file);
 
 ?>
