@@ -2,13 +2,16 @@
 <s:Application xmlns:fx="http://ns.adobe.com/mxml/2009"
 			   xmlns:s="library://ns.adobe.com/flex/spark"
 			   xmlns:mx="library://ns.adobe.com/flex/mx"
+			   width="238" height="140"
 			   creationComplete="init()">
 	
 	<fx:Script>
 		<![CDATA[
 			import com.adobe.audio.format.WAVWriter;
 			import com.hurlant.util.Base64;
+			
 			import flash.events.SampleDataEvent;
+			import flash.external.ExternalInterface;
 			import flash.media.Microphone;
 			import flash.media.Sound;
 			import flash.utils.ByteArray;
@@ -26,9 +29,13 @@
 			private var outputSnd:Sound;
 			private var sChannel:SoundChannel;
 			
+			public var soundUploadConfig:Object = ExternalInterface.call("soundUploadConfig","");
+			
 			protected function init():void
 			{
 				microphoneList = Microphone.names;
+				
+				setupMicrophone(); //自动选择第一个音频硬件
 			}
 			
 			/**
@@ -37,6 +44,7 @@
 			 * param _url:String   "a.mp3"
 			 * 
 			 * */
+			
 			protected function getSoundFromUrl(_url:String):void{
 				urlReq= new URLRequest(_url);  
 				sourceSnd=new Sound(); 
@@ -66,14 +74,15 @@
 			 * */
 			protected function setupMicrophone():void
 			{
-				microphone = Microphone.getMicrophone(comboMicList.selectedIndex);
+				microphone = Microphone.getMicrophone(0);
 				microphone.rate = 44;
 				microphone.setUseEchoSuppression(true);
 				microphone.setLoopBack(false);
 				microphone.setSilenceLevel(0,0);
 				microphone.gain=50;
 				
-				smr.enabled=true;
+				startRecordBTN.visible = true;
+				stopRecordBTN.visible = false;
 			}
 			
 			/**
@@ -81,7 +90,13 @@
 			 * 
 			 * */
 			protected function startMicRecording():void
-			{
+			{	
+				startRecordBTN.visible = false;
+				stopRecordBTN.visible = true;
+				
+				starPlayBTN.enabled = false;
+				uploadBTN.enabled = false;
+				
 				isRecording = true;
 				soundRecording = new ByteArray();
 				microphone.addEventListener(SampleDataEvent.SAMPLE_DATA, gotMicData);
@@ -101,6 +116,12 @@
 			 * */
 			protected function stopMicRecording():void
 			{
+				startRecordBTN.visible = true;
+				stopRecordBTN.visible = false;
+				
+				starPlayBTN.enabled = true;
+				uploadBTN.enabled = true;
+				
 				isRecording = false;
 				microphone.removeEventListener(SampleDataEvent.SAMPLE_DATA, gotMicData);
 				if(sChannel){
@@ -120,7 +141,7 @@
 					soundRecording.writeFloat(sample);
 					
 					//////////////////////////////////////
-					tips.text = "录音 soundRecording.length: " + String(soundRecording.length / 1000);
+					tips.text = "开始录音：" + String(soundRecording.length);
 				}
 				
 			}
@@ -132,6 +153,9 @@
 			private var playRecord:Boolean = true;
 			protected function playbackData():void
 			{
+				starPlayBTN.visible = false;
+				stopPlayBTN.visible = true;
+				
 				soundRecording.position = 0;
 				
 				playRecord = true;
@@ -145,6 +169,8 @@
 			//停止播放录音
 			private function stopPlaybackData():void{
 				playRecord = false;
+				starPlayBTN.visible = true;
+				stopPlayBTN.visible = false;
 			}
 			
 			private function playSound(soundOutput:SampleDataEvent):void
@@ -152,14 +178,14 @@
 				//soundOutput.data.writeBytes(soundRecording);
 				
 				//////////////////////////////////////////
-				tips.text = "播放录音 soundRecording.length: " + String(soundRecording.length);
-				tips.text += "\n\n" + "outputSnd.bytesAvailable: " + String(soundRecording.bytesAvailable);
+				tips.text = "播放录音：" + String(soundRecording.bytesAvailable);
 				
 				if(playRecord == false){
 					return;
 				}
 				
 				if (!soundRecording.bytesAvailable > 0){
+					stopPlaybackData();
 					return;				
 				}
 
@@ -201,7 +227,7 @@
 			}
 			private function mp3EncodeProgress(event : ProgressEvent) : void {
 				
-				tips.text = event.bytesLoaded + " : " + event.bytesTotal;
+				tips.text = "正在转换格式：" + event.bytesLoaded + " : " + event.bytesTotal + "，请稍后。。。";
 			}
 			
 			private function mp3EncodeError(event : ErrorEvent) : void {
@@ -213,7 +239,7 @@
 				mp3Encoder.mp3Data.position = 0;
 				
 				tips.text = "转换格式 mp3 成功，长度：" + String(mp3Encoder.mp3Data.length)
-						+ '\n\n开始上传';
+						+ '\n\n开始上传，请稍后。。。';
 								
 				upload();
 			}
@@ -221,11 +247,13 @@
 			public function upload():void{
 				
 				var params:URLVariables=new URLVariables();
-				params.rnd = Math.random();
+				for(var i:* in soundUploadConfig){
+					params[i] = soundUploadConfig[i];
+				}
 				params.file = Base64.encodeByteArray(mp3Encoder.mp3Data);
 				
 				var _request:URLRequest = new URLRequest();
-				_request.url = "./file_upload/upload.php";
+				_request.url = soundUploadConfig.uploadURL;
 				_request.method = URLRequestMethod.POST;
 				_request.data = params;					
 				_request.requestHeaders = new Array(new URLRequestHeader("Content-Type", "application/x-www-form-urlencoded"));
@@ -233,10 +261,8 @@
 				var urlLoader:URLLoader = new URLLoader();
 				urlLoader.dataFormat = URLLoaderDataFormat.TEXT;
 				urlLoader.addEventListener(Event.COMPLETE, function(event:Event):void{
-					tips.text = "上传成功！";
-					
-					//调用页面的页面中的js，执行需要的操作
-					ExternalInterface.call("callJS");
+					tips.text += '\n\n上传成功';
+					ExternalInterface.call("soundUploadCallback", JSON.parse(event.currentTarget.data));
 				});
 				urlLoader.load(_request);
 			}
@@ -244,18 +270,23 @@
 		]]>
 	</fx:Script>
 	
+	<!--
 	<mx:ComboBox id="comboMicList" x="67" y="63" width="196" dataProvider="{microphoneList}"/>
-	<s:Button x="279" y="63" width="90" label="选择麦克风" click="setupMicrophone()"/>
+	<s:Button x="279" y="63" width="90" label="选择麦克风" click="setupMicrophone()"/>-->
 	
-	<s:Button id="smr" x="67" y="123" width="90" label="开始录音" click="startMicRecording()" />
-	<s:Button x="67" y="157" width="90" label="停止录音" click="stopMicRecording()"/>
+	<s:Button id="startRecordBTN" buttonMode="true" x="6" y="5" width="70" label="开始录音" click="startMicRecording()" />
+	<s:Button id="stopRecordBTN" visible="false" buttonMode="true" x="6" y="5" width="70" label="停止录音" click="stopMicRecording()"/>
 	
-	<s:Button x="279" y="123" width="90" label="播放录音" click="playbackData()"/>
-	<s:Button x="278" y="157" width="90" label="停止播放" click="stopPlaybackData()"/>
+	<s:Button id="starPlayBTN" enabled="false" buttonMode="true" x="84" y="5" width="70" label="播放录音" click="playbackData()"/>
+	<s:Button id="stopPlayBTN" visible="false" buttonMode="true" x="84" y="5" width="70" label="停止播放" click="stopPlaybackData()"/>
 	
-	<s:TextArea x="67" y="215" width="302" id="tips" height="154"/>
-	<s:Button x="67" y="384" label="上传" click="encodeToMP3()"/>
-	<s:Button x="173" y="384" label="播放 test.mp3" click="getSoundFromUrl('./file_upload/test.mp3?'+Math.random())"/>
+	<s:TextArea x="7" y="34" width="221" id="tips" height="96" />
+	
+	<s:Button id="uploadBTN" enabled="false" buttonMode="true" x="161" y="5" width="70" label="上传" chromeColor="#8CD0FF" click="encodeToMP3()"
+			  color="#000000"/>
+	
+	<!--
+	<s:Button x="134" y="108" label="播放 test.mp3" click="getSoundFromUrl('./file_upload/test.mp3?'+Math.random())"/>-->
 	
 	
 </s:Application>
