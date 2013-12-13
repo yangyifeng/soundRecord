@@ -9,6 +9,22 @@
     <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
 
     <title>网页版录音，在内存中生成 mp3 文件，post 到 php 服务端保存</title>
+    <script type="text/javascript">
+        //上传音频文件需要预设置
+        function soundUploadConfig()
+        {
+            return {
+                "uploadURL": "./file_upload/upload.php",
+                "parms_1": "xxx", 
+                "parms_2": "yyyy"
+            };
+        }
+        //上传音频文件把服务器返回的东西给 js 用
+        function soundUploadCallback(_json)
+        {
+            console.log(_json);
+        }
+    </script>
     <script type="text/javascript" src="./assets/swfobject.js"></script>
         <script type="text/javascript">
             // For version detection, set to min. required Flash Player version, or 0 (or 0.0.0), for no version detection. 
@@ -26,8 +42,8 @@
             attributes.name = "soundrecord";
             attributes.align = "middle";
             swfobject.embedSWF(
-                "./assets/soundrecord.swf", "flashContent", 
-                "580", "560", 
+                "./assets/sound_record.swf", "flashContent", 
+                "238", "140", 
                 swfVersionStr, xiSwfUrlStr, 
                 flashvars, params, attributes);
             // JavaScript enabled so display the flashContent div in case it is not replaced with a swf object.
@@ -68,35 +84,6 @@
                                 + pageHost + "www.adobe.com/images/shared/download_buttons/get_flash_player.gif' alt='Get Adobe Flash player' /></a>" ); 
             </script> 
         </div>
-        
-        <noscript>
-            <object classid="clsid:D27CDB6E-AE6D-11cf-96B8-444553540000" width="580" height="560" id="soundrecord">
-                <param name="movie" value="./assets/soundrecord.swf" />
-                <param name="quality" value="high" />
-                <param name="bgcolor" value="#ffffff" />
-                <param name="allowScriptAccess" value="sameDomain" />
-                <param name="allowFullScreen" value="true" />
-                <!--[if !IE]>-->
-                <object type="application/x-shockwave-flash" data="soundrecord.swf" width="580" height="560">
-                    <param name="quality" value="high" />
-                    <param name="bgcolor" value="#ffffff" />
-                    <param name="allowScriptAccess" value="sameDomain" />
-                    <param name="allowFullScreen" value="true" />
-                <!--<![endif]-->
-                <!--[if gte IE 6]>-->
-                    <p> 
-                        Either scripts and active content are not permitted to run or Adobe Flash Player version
-                        11.1.0 or greater is not installed.
-                    </p>
-                <!--<![endif]-->
-                    <a href="http://www.adobe.com/go/getflashplayer">
-                        <img src="http://www.adobe.com/images/shared/download_buttons/get_flash_player.gif" alt="Get Adobe Flash Player" />
-                    </a>
-                <!--[if !IE]>-->
-                </object>
-                <!--<![endif]-->
-            </object>
-        </noscript>   
       </section>
     </div>
 
